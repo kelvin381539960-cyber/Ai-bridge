@@ -23,6 +23,12 @@ export type GitFile = {
   downloadUrl?: string | null;
 };
 
+export type BatchCreateFileInput = {
+  path: string;
+  content: string;
+  encoding?: 'utf-8' | 'base64';
+};
+
 function branchOrDefault(branch?: string): string {
   return branch || config.defaultBranch;
 }
@@ -118,6 +124,54 @@ export async function createFile(args: FileArgs & { content: string; encoding?: 
   });
 
   return { path, commitSha: response.data.commit.sha, contentSha: response.data.content?.sha };
+}
+
+export async function createFilesInSingleCommit(args: BaseArgs & { files: BatchCreateFileInput[]; message?: string }) {
+  assertRepoAllowed(args.owner, args.repo);
+  if (args.files.length === 0) {
+    throw Object.assign(new Error('Files are required'), { statusCode: 400 });
+  }
+  if (args.files.length > config.maxBatchOperations) {
+    throw Object.assign(new Error(`Too many files: ${args.files.length} exceeds ${config.maxBatchOperations}`), { statusCode: 413 });
+  }
+
+  const branchName = branchOrDefault(args.branch);
+  const branch = await octokit.repos.getBranch({ owner: args.owner, repo: args.repo, branch: branchName });
+  const baseCommitSha = branch.data.commit.sha;
+  const baseTreeSha = branch.data.commit.commit.tree.sha;
+  const tree = args.files.map((file) => {
+    const path = guard(args.owner, args.repo, file.path)!;
+    return {
+      path,
+      mode: '100644' as const,
+      type: 'blob' as const,
+      content: encodeContent(file.content, file.encoding ?? 'utf-8'),
+    };
+  });
+
+  const nextTree = await octokit.git.createTree({
+    owner: args.owner,
+    repo: args.repo,
+    base_tree: baseTreeSha,
+    tree,
+  });
+
+  const commit = await octokit.git.createCommit({
+    owner: args.owner,
+    repo: args.repo,
+    message: args.message || `Create ${args.files.length} files`,
+    tree: nextTree.data.sha,
+    parents: [baseCommitSha],
+  });
+
+  await octokit.git.updateRef({
+    owner: args.owner,
+    repo: args.repo,
+    ref: `heads/${branchName}`,
+    sha: commit.data.sha,
+  });
+
+  return { commitSha: commit.data.sha, files: tree.map((item) => ({ path: item.path })) };
 }
 
 export async function updateFile(args: FileArgs & { content: string; sha?: string; encoding?: 'utf-8' | 'base64'; message?: string }) {
