@@ -33,7 +33,19 @@ function guard(owner: string, repo: string, path?: string): string | undefined {
   return assertPathAllowed(path);
 }
 
+function assertContentSize(content: string, encoding: 'utf-8' | 'base64'): void {
+  const byteLength = encoding === 'base64'
+    ? Buffer.from(content, 'base64').byteLength
+    : Buffer.byteLength(content, 'utf8');
+  const limit = encoding === 'base64' ? config.maxBinaryBytes : config.maxTextBytes;
+
+  if (byteLength > limit) {
+    throw Object.assign(new Error(`Content is too large: ${byteLength} bytes exceeds ${limit} bytes`), { statusCode: 413 });
+  }
+}
+
 function encodeContent(content: string, encoding: 'utf-8' | 'base64'): string {
+  assertContentSize(content, encoding);
   return encoding === 'base64' ? content : Buffer.from(content, 'utf8').toString('base64');
 }
 
