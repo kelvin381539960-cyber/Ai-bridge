@@ -1,0 +1,355 @@
+openapi: 3.1.0
+info:
+  title: AI Bridge API
+  version: 0.1.0
+  description: GitHub File Bridge API for GPT Actions.
+servers:
+  - url: https://YOUR_DEPLOYED_AI_BRIDGE_DOMAIN
+    description: Replace with your deployed AI Bridge base URL
+components:
+  securitySchemes:
+    BridgeApiKey:
+      type: apiKey
+      in: header
+      name: x-bridge-api-key
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        issues:
+          description: Validation error details when available
+    RepoFields:
+      type: object
+      required: [owner, repo]
+      properties:
+        owner:
+          type: string
+          example: kelvin381539960-cyber
+        repo:
+          type: string
+          example: Ai-bridge
+        branch:
+          type: string
+          example: main
+    FileCreateRequest:
+      allOf:
+        - $ref: '#/components/schemas/RepoFields'
+        - type: object
+          required: [path, content]
+          properties:
+            path:
+              type: string
+              example: docs/example.md
+            content:
+              type: string
+            encoding:
+              type: string
+              enum: [utf-8, base64]
+              default: utf-8
+            message:
+              type: string
+    FileUpdateRequest:
+      allOf:
+        - $ref: '#/components/schemas/FileCreateRequest'
+        - type: object
+          properties:
+            sha:
+              type: string
+              description: Optional current Git blob SHA for conflict control.
+    FileDeleteRequest:
+      allOf:
+        - $ref: '#/components/schemas/RepoFields'
+        - type: object
+          required: [path]
+          properties:
+            path:
+              type: string
+            sha:
+              type: string
+            message:
+              type: string
+    FileMoveRequest:
+      allOf:
+        - $ref: '#/components/schemas/RepoFields'
+        - type: object
+          required: [fromPath, toPath]
+          properties:
+            fromPath:
+              type: string
+            toPath:
+              type: string
+            message:
+              type: string
+security:
+  - BridgeApiKey: []
+paths:
+  /health:
+    get:
+      operationId: healthCheck
+      summary: Check service health
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+  /api/tree:
+    get:
+      operationId: listTree
+      summary: List repository tree
+      parameters:
+        - name: owner
+          in: query
+          required: true
+          schema: { type: string }
+        - name: repo
+          in: query
+          required: true
+          schema: { type: string }
+        - name: branch
+          in: query
+          required: false
+          schema: { type: string }
+        - name: path
+          in: query
+          required: false
+          schema: { type: string }
+        - name: recursive
+          in: query
+          required: false
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: Tree entries
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+  /api/file:
+    get:
+      operationId: readFile
+      summary: Read a file from GitHub
+      parameters:
+        - name: owner
+          in: query
+          required: true
+          schema: { type: string }
+        - name: repo
+          in: query
+          required: true
+          schema: { type: string }
+        - name: branch
+          in: query
+          required: false
+          schema: { type: string }
+        - name: path
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: File content and metadata
+  /api/file/create:
+    post:
+      operationId: createFile
+      summary: Create a file in GitHub
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FileCreateRequest' }
+      responses:
+        '200':
+          description: Created file commit result
+  /api/file/update:
+    post:
+      operationId: updateFile
+      summary: Update a file in GitHub
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FileUpdateRequest' }
+      responses:
+        '200':
+          description: Updated file commit result
+  /api/file/delete:
+    post:
+      operationId: deleteFile
+      summary: Delete a file in GitHub through a commit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FileDeleteRequest' }
+      responses:
+        '200':
+          description: Deleted file commit result
+  /api/file/move:
+    post:
+      operationId: moveFile
+      summary: Move or rename a file in GitHub
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FileMoveRequest' }
+      responses:
+        '200':
+          description: Move result
+  /api/file/history:
+    get:
+      operationId: fileHistory
+      summary: List commit history for a file
+      parameters:
+        - name: owner
+          in: query
+          required: true
+          schema: { type: string }
+        - name: repo
+          in: query
+          required: true
+          schema: { type: string }
+        - name: branch
+          in: query
+          required: false
+          schema: { type: string }
+        - name: path
+          in: query
+          required: true
+          schema: { type: string }
+        - name: perPage
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100 }
+      responses:
+        '200':
+          description: Commit history
+  /api/content/extract:
+    get:
+      operationId: extractContent
+      summary: Extract readable content from text, PDF, DOCX, Excel, or image files
+      parameters:
+        - name: owner
+          in: query
+          required: true
+          schema: { type: string }
+        - name: repo
+          in: query
+          required: true
+          schema: { type: string }
+        - name: branch
+          in: query
+          required: false
+          schema: { type: string }
+        - name: path
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Extracted content
+  /api/edit/text/replace:
+    post:
+      operationId: replaceText
+      summary: Replace text in a text-readable file
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/RepoFields'
+                - type: object
+                  required: [path, replacements]
+                  properties:
+                    path: { type: string }
+                    outputPath: { type: string }
+                    replacements:
+                      type: array
+                      items:
+                        type: object
+                        required: [from, to]
+                        properties:
+                          from: { type: string }
+                          to: { type: string }
+                    message: { type: string }
+      responses:
+        '200':
+          description: Replacement result
+  /api/edit/docx/from-text:
+    post:
+      operationId: createDocxFromText
+      summary: Create a DOCX file from plain text
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/RepoFields'
+                - type: object
+                  required: [path, text]
+                  properties:
+                    path: { type: string }
+                    outputPath: { type: string }
+                    text: { type: string }
+                    message: { type: string }
+      responses:
+        '200':
+          description: DOCX creation result
+  /api/edit/excel/update-cell:
+    post:
+      operationId: updateExcelCell
+      summary: Update one Excel cell
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/RepoFields'
+                - type: object
+                  required: [path, sheetName, cell, value]
+                  properties:
+                    path: { type: string }
+                    outputPath: { type: string }
+                    sheetName: { type: string }
+                    cell: { type: string }
+                    value:
+                      oneOf:
+                        - { type: string }
+                        - { type: number }
+                        - { type: boolean }
+                        - { type: 'null' }
+                    message: { type: string }
+      responses:
+        '200':
+          description: Excel update result
+  /api/edit/excel/append-rows:
+    post:
+      operationId: appendExcelRows
+      summary: Append rows to an Excel sheet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/RepoFields'
+                - type: object
+                  required: [path, sheetName, rows]
+                  properties:
+                    path: { type: string }
+                    outputPath: { type: string }
+                    sheetName: { type: string }
+                    rows:
+                      type: array
+                      items:
+                        type: object
+                        additionalProperties: true
+                    message: { type: string }
+      responses:
+        '200':
+          description: Excel append result
