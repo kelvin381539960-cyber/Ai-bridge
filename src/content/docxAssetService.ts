@@ -1,6 +1,6 @@
 import path from 'node:path';
 import JSZip from 'jszip';
-import { createFile, readFile } from '../github/fileService.js';
+import { createFilesInSingleCommit, readFile } from '../github/fileService.js';
 
 export type ExtractDocxImagesArgs = {
   owner: string;
@@ -48,36 +48,36 @@ export async function extractDocxImages(args: ExtractDocxImagesArgs) {
     .sort((a, b) => a.name.localeCompare(b.name));
 
   const outputDir = normalizeOutputDir(args.outputDir, args.path);
-  const images = [];
+  const prepared = [];
 
   for (const entry of mediaEntries) {
     const buffer = await entry.async('nodebuffer');
     const fileName = path.posix.basename(entry.name);
     const outputPath = `${outputDir}/${fileName}`;
-    const image = {
+    prepared.push({
       fileName,
       sourceEntry: entry.name,
       outputPath,
       size: buffer.byteLength,
       contentType: contentTypeFor(fileName),
-      contentBase64: mode === 'preview' ? buffer.toString('base64') : undefined,
-      commitSha: undefined as string | undefined,
-    };
+      contentBase64: buffer.toString('base64'),
+    });
+  }
 
-    if (mode === 'save') {
-      const created = await createFile({
-        owner: args.owner,
-        repo: args.repo,
-        branch: args.branch,
-        path: outputPath,
-        content: buffer.toString('base64'),
+  let commitSha: string | undefined;
+  if (mode === 'save' && prepared.length > 0) {
+    const created = await createFilesInSingleCommit({
+      owner: args.owner,
+      repo: args.repo,
+      branch: args.branch,
+      message: args.message || `Extract ${prepared.length} DOCX images from ${args.path}`,
+      files: prepared.map((image) => ({
+        path: image.outputPath,
+        content: image.contentBase64,
         encoding: 'base64',
-        message: args.message || `Extract DOCX image ${fileName}`,
-      });
-      image.commitSha = created.commitSha;
-    }
-
-    images.push(image);
+      })),
+    });
+    commitSha = created.commitSha;
   }
 
   return {
@@ -85,7 +85,16 @@ export async function extractDocxImages(args: ExtractDocxImagesArgs) {
     path: source.path,
     mode,
     outputDir,
-    count: images.length,
-    images,
+    count: prepared.length,
+    commitSha,
+    images: prepared.map((image) => ({
+      fileName: image.fileName,
+      sourceEntry: image.sourceEntry,
+      outputPath: image.outputPath,
+      size: image.size,
+      contentType: image.contentType,
+      contentBase64: mode === 'preview' ? image.contentBase64 : undefined,
+      commitSha: mode === 'save' ? commitSha : undefined,
+    })),
   };
 }
