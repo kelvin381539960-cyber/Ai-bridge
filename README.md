@@ -22,14 +22,17 @@ The first version focuses on GitHub files only.
 - Create files
 - Update files
 - Delete files through Git commits
-- Move / rename files
+- Move / rename files in a single commit
 - Read file commit history
 - Extract content from:
   - text files
   - PDF
   - DOCX
-  - XLSX / XLS
+  - XLSX / XLS with optional `sheetName` and `maxRows`
   - images as base64 for downstream vision or preview tools
+- Extract DOCX embedded images:
+  - preview mode returns image base64
+  - save mode writes extracted images to GitHub in a single commit
 - Limited editing:
   - text replacement for text-readable files
   - create DOCX from plain text
@@ -167,6 +170,8 @@ POST /api/file/delete
 POST /api/file/move
 ```
 
+This operation is done in one Git commit.
+
 ```json
 {
   "owner": "kelvin381539960-cyber",
@@ -189,6 +194,12 @@ GET /api/file/history?owner=kelvin381539960-cyber&repo=Ai-bridge&path=README.md
 GET /api/content/extract?owner=kelvin381539960-cyber&repo=Ai-bridge&path=some-file.pdf
 ```
 
+Excel extraction supports optional parameters:
+
+```http
+GET /api/content/extract?owner=kelvin381539960-cyber&repo=Ai-bridge&path=data.xlsx&sheetName=Sheet1&maxRows=100
+```
+
 Supported extraction behavior:
 
 | Type | Behavior |
@@ -196,8 +207,40 @@ Supported extraction behavior:
 | Text | returns text |
 | PDF | extracts text and page count |
 | DOCX | extracts raw text |
-| Excel | returns sheet names and first 50 preview rows |
+| Excel | returns sheet names and preview rows; default 50 rows, configurable with `maxRows`, capped at 500 |
 | Image | returns base64 for downstream vision/preview tools |
+
+### Extract DOCX images
+
+```http
+POST /api/content/docx/extract-images
+```
+
+Preview mode:
+
+```json
+{
+  "owner": "kelvin381539960-cyber",
+  "repo": "Ai-bridge",
+  "path": "docs/example.docx",
+  "mode": "preview"
+}
+```
+
+Save mode:
+
+```json
+{
+  "owner": "kelvin381539960-cyber",
+  "repo": "Ai-bridge",
+  "path": "docs/example.docx",
+  "outputDir": "docs/example-assets",
+  "mode": "save",
+  "message": "Extract DOCX images"
+}
+```
+
+Save mode writes all extracted images in one Git commit.
 
 ## Limited editing
 
@@ -275,6 +318,7 @@ POST /api/edit/excel/append-rows
 - `ALLOWED_PATH_PREFIXES` optionally limits writable/readable paths.
 - Git commits provide history and rollback capability.
 - Updates use GitHub file SHA when available to reduce overwrite risk.
+- Content write size is limited by `MAX_TEXT_BYTES` and `MAX_BINARY_BYTES`.
 
 ## GPT Actions
 
