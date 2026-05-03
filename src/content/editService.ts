@@ -43,16 +43,21 @@ export async function replaceTextFileContent(args: EditBaseArgs & { replacements
   }
 
   const targetPath = args.outputPath || args.path;
-  const writer = targetPath === args.path ? updateFile : createFile;
-  return writer({
+  const payload = {
     owner: args.owner,
     repo: args.repo,
     branch: args.branch,
     path: targetPath,
     content: next,
-    encoding: 'utf-8',
+    encoding: 'utf-8' as const,
     message: args.message || `Replace text in ${targetPath}`,
-  });
+  };
+
+  if (targetPath === args.path) {
+    return updateFile(payload);
+  }
+
+  return createFile(payload);
 }
 
 export async function updateExcelCell(args: EditBaseArgs & { sheetName: string; cell: string; value: string | number | boolean | null }) {
@@ -67,17 +72,21 @@ export async function updateExcelCell(args: EditBaseArgs & { sheetName: string; 
   sheet[args.cell] = { t: typeof args.value === 'number' ? 'n' : typeof args.value === 'boolean' ? 'b' : 's', v: args.value ?? '' };
   const output = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
   const targetPath = args.outputPath || args.path;
-  const writer = targetPath === args.path ? updateFile : createFile;
-
-  return writer({
+  const payload = {
     owner: args.owner,
     repo: args.repo,
     branch: args.branch,
     path: targetPath,
     content: output.toString('base64'),
-    encoding: 'base64',
+    encoding: 'base64' as const,
     message: args.message || `Update Excel cell ${args.sheetName}!${args.cell}`,
-  });
+  };
+
+  if (targetPath === args.path) {
+    return updateFile(payload);
+  }
+
+  return createFile(payload);
 }
 
 export async function appendExcelRows(args: EditBaseArgs & { sheetName: string; rows: Array<Record<string, unknown>> }) {
@@ -95,15 +104,19 @@ export async function appendExcelRows(args: EditBaseArgs & { sheetName: string; 
 
   const output = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
   const targetPath = args.outputPath || args.path;
-  const writer = targetPath === args.path ? updateFile : createFile;
-
-  return writer({
+  const payload = {
     owner: args.owner,
     repo: args.repo,
     branch: args.branch,
     path: targetPath,
     content: output.toString('base64'),
-    encoding: 'base64',
+    encoding: 'base64' as const,
     message: args.message || `Append rows to ${args.sheetName}`,
-  });
+  };
+
+  if (targetPath === args.path) {
+    return updateFile(payload);
+  }
+
+  return createFile(payload);
 }
