@@ -189,7 +189,7 @@ paths:
   /api/file/move:
     post:
       operationId: moveFile
-      summary: Move or rename a file in GitHub
+      summary: Move or rename a file in GitHub in a single commit
       requestBody:
         required: true
         content:
@@ -247,9 +247,43 @@ paths:
           in: query
           required: true
           schema: { type: string }
+        - name: sheetName
+          in: query
+          required: false
+          schema: { type: string }
+          description: Optional Excel sheet name to extract.
+        - name: maxRows
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 500, default: 50 }
+          description: Optional Excel preview row limit.
       responses:
         '200':
           description: Extracted content
+  /api/content/docx/extract-images:
+    post:
+      operationId: extractDocxImages
+      summary: Extract images from a DOCX file, optionally saving them to GitHub
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/RepoFields'
+                - type: object
+                  required: [path]
+                  properties:
+                    path: { type: string }
+                    outputDir: { type: string }
+                    mode:
+                      type: string
+                      enum: [preview, save]
+                      default: preview
+                    message: { type: string }
+      responses:
+        '200':
+          description: DOCX image extraction result
   /api/edit/text/replace:
     post:
       operationId: replaceText
