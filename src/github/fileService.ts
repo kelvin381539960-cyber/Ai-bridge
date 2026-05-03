@@ -155,26 +155,48 @@ export async function deleteFile(args: FileArgs & { sha?: string; message?: stri
 export async function moveFile(args: BaseArgs & { fromPath: string; toPath: string; message?: string }) {
   const fromPath = guard(args.owner, args.repo, args.fromPath)!;
   const toPath = guard(args.owner, args.repo, args.toPath)!;
-  const file = await readFile({ owner: args.owner, repo: args.repo, branch: args.branch, path: fromPath });
-  const created = await createFile({
+  const branchName = branchOrDefault(args.branch);
+  const branch = await octokit.repos.getBranch({ owner: args.owner, repo: args.repo, branch: branchName });
+  const baseCommitSha = branch.data.commit.sha;
+  const baseTreeSha = branch.data.commit.commit.tree.sha;
+  const source = await readFile({ owner: args.owner, repo: args.repo, branch: branchName, path: fromPath });
+
+  const tree = await octokit.git.createTree({
     owner: args.owner,
     repo: args.repo,
-    branch: args.branch,
-    path: toPath,
-    content: file.contentBase64,
-    encoding: 'base64',
-    message: args.message || `Move ${fromPath} to ${toPath}`,
-  });
-  const deleted = await deleteFile({
-    owner: args.owner,
-    repo: args.repo,
-    branch: args.branch,
-    path: fromPath,
-    sha: file.sha,
-    message: args.message || `Remove ${fromPath} after move`,
+    base_tree: baseTreeSha,
+    tree: [
+      {
+        path: toPath,
+        mode: '100644',
+        type: 'blob',
+        sha: source.sha,
+      },
+      {
+        path: fromPath,
+        mode: '100644',
+        type: 'blob',
+        sha: null,
+      },
+    ],
   });
 
-  return { fromPath, toPath, createCommitSha: created.commitSha, deleteCommitSha: deleted.commitSha };
+  const commit = await octokit.git.createCommit({
+    owner: args.owner,
+    repo: args.repo,
+    message: args.message || `Move ${fromPath} to ${toPath}`,
+    tree: tree.data.sha,
+    parents: [baseCommitSha],
+  });
+
+  await octokit.git.updateRef({
+    owner: args.owner,
+    repo: args.repo,
+    ref: `heads/${branchName}`,
+    sha: commit.data.sha,
+  });
+
+  return { fromPath, toPath, commitSha: commit.data.sha };
 }
 
 export async function fileHistory(args: FileArgs & { perPage?: number }) {
