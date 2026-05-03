@@ -9,6 +9,8 @@ const extractSchema = z.object({
   repo: z.string().min(1),
   branch: z.string().optional(),
   path: z.string().min(1),
+  sheetName: z.string().optional(),
+  maxRows: z.coerce.number().int().min(1).max(500).optional(),
 });
 
 contentRouter.get('/extract', async (req, res, next) => {
