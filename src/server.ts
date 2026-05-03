@@ -6,6 +6,7 @@ import { assertConfig, config } from './config.js';
 import { requireApiKey } from './middleware/auth.js';
 import { filesRouter } from './routes/files.js';
 import { contentRouter } from './routes/content.js';
+import { editRouter } from './routes/edit.js';
 
 assertConfig();
 
@@ -23,6 +24,7 @@ app.get('/health', (_req, res) => {
 app.use('/api', requireApiKey);
 app.use('/api', filesRouter);
 app.use('/api/content', contentRouter);
+app.use('/api/edit', editRouter);
 
 app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   const err = error as Error & { statusCode?: number; issues?: unknown };
