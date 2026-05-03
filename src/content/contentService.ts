@@ -7,7 +7,14 @@ export type ExtractArgs = {
   repo: string;
   branch?: string;
   path: string;
+  sheetName?: string;
+  maxRows?: number;
 };
+
+function clampMaxRows(maxRows: number | undefined): number {
+  if (!maxRows || !Number.isFinite(maxRows)) return 50;
+  return Math.min(Math.max(Math.floor(maxRows), 1), 500);
+}
 
 export async function extractContent(args: ExtractArgs) {
   const file = await readFile(args);
@@ -52,13 +59,19 @@ export async function extractContent(args: ExtractArgs) {
   if (ext === '.xlsx' || ext === '.xls') {
     const xlsx = await import('xlsx');
     const workbook = xlsx.read(buffer, { type: 'buffer', cellDates: true });
-    const sheets = workbook.SheetNames.map((sheetName) => {
+    const limit = clampMaxRows(args.maxRows);
+    const targetSheetNames = args.sheetName ? [args.sheetName] : workbook.SheetNames;
+    const sheets = targetSheetNames.map((sheetName) => {
       const sheet = workbook.Sheets[sheetName];
+      if (!sheet) {
+        throw Object.assign(new Error(`Sheet not found: ${sheetName}`), { statusCode: 404 });
+      }
       const rows = xlsx.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: null });
       return {
         name: sheetName,
         rowCount: rows.length,
-        previewRows: rows.slice(0, 50),
+        previewLimit: limit,
+        previewRows: rows.slice(0, limit),
       };
     });
     return {
